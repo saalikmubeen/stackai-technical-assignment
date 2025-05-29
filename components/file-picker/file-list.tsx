@@ -68,8 +68,8 @@ export default function FileList({
   });
 
   return (
-    <div className="h-full w-full overflow-y-auto">
-      <div className="min-w-[640px]">
+    <div className="h-full w-full overflow-y-auto overflow-x-auto">
+      <div className="">
         <table className="w-full border-collapse">
           <thead className="bg-muted/50 sticky top-0">
             <tr>
