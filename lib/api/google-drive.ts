@@ -50,15 +50,6 @@ export async function getAuthHeaders(): Promise<{
   }
 }
 
-// Initialize session with auth headers
-// (async () => {
-//   const authHeaders = await getAuthHeaders();
-//   GoogleDriveSession.defaults.headers.common = {
-//     ...GoogleDriveSession.defaults.headers.common,
-//     ...authHeaders,
-//   };
-// })();
-
 let isSessionInitialized = false;
 
 export async function initializeGoogleDriveSession() {
