@@ -51,13 +51,25 @@ export async function getAuthHeaders(): Promise<{
 }
 
 // Initialize session with auth headers
-(async () => {
+// (async () => {
+//   const authHeaders = await getAuthHeaders();
+//   GoogleDriveSession.defaults.headers.common = {
+//     ...GoogleDriveSession.defaults.headers.common,
+//     ...authHeaders,
+//   };
+// })();
+
+let isSessionInitialized = false;
+
+export async function initializeGoogleDriveSession() {
+  if (isSessionInitialized) return;
   const authHeaders = await getAuthHeaders();
   GoogleDriveSession.defaults.headers.common = {
     ...GoogleDriveSession.defaults.headers.common,
     ...authHeaders,
   };
-})();
+  isSessionInitialized = true;
+}
 
 // API Functions
 export async function getConnection() {
@@ -121,12 +133,21 @@ export async function getFolderContents(
 }
 
 export async function indexResource(resourceId: string) {
-  console.log('Indexing resource:', resourceId);
   try {
-    // Create a new knowledge base for the resource
+    // Get current resource info
     const { connectionResourcesUrl } = await getConnectionUrls();
-    const connection = await getConnection();
+    const resourceResponse = await GoogleDriveSession.get(
+      `${connectionResourcesUrl}?${new URLSearchParams({
+        resource_id: resourceId,
+      })}`
+    );
+    const resource = resourceResponse.data;
+    console.log('Resource to index:', resource);
 
+    console.log('Indexing resource with id:', resourceId);
+
+    // Create knowledge base
+    const connection = await getConnection();
     const createKbResponse = await GoogleDriveSession.post(
       `${STACK_AI_BACKEND_URL}/knowledge_bases`,
       {
@@ -154,20 +175,38 @@ export async function indexResource(resourceId: string) {
 
     const knowledgeBaseId = createKbResponse.data.knowledge_base_id;
 
-    // Get org ID for sync
+    // Get org ID and trigger sync
     const orgResponse = await GoogleDriveSession.get(
       `${STACK_AI_BACKEND_URL}/organizations/me/current`
     );
     const orgId = orgResponse.data.org_id;
 
     // Trigger sync to start indexing
-    const res = await GoogleDriveSession.get(
+    await GoogleDriveSession.get(
       `${STACK_AI_BACKEND_URL}/knowledge_bases/sync/trigger/${knowledgeBaseId}/${orgId}`
     );
-    console.log('Sync triggered:', res.data);
 
-    console.log('✅ Sync triggered to index resource:', resourceId);
-    console.log(createKbResponse.data);
+    // After triggering sync, we need to poll the knowledge base status
+    // to update our UI accordingly
+    const kbResourcesUrl = `${STACK_AI_BACKEND_URL}/knowledge_bases/${knowledgeBaseId}/resources/children`;
+    const kbResponse = await GoogleDriveSession.get(
+      `${kbResourcesUrl}?${new URLSearchParams({
+        resource_path: '/',
+      })}`
+    );
+
+    // Update our local state with the knowledge base ID
+    const indexedResource =
+      kbResponse.data.data?.[0] || kbResponse.data[0];
+    if (indexedResource) {
+      // Invalidate the query to refresh the UI
+      return {
+        ...indexedResource,
+        knowledge_base_id: knowledgeBaseId,
+        status: 'indexed',
+      };
+    }
+
     return createKbResponse.data;
   } catch (error) {
     console.error('Error indexing resource:', error);
@@ -175,41 +214,27 @@ export async function indexResource(resourceId: string) {
   }
 }
 
-export async function deIndexResource(resourceId: string) {
+export async function deIndexResource(
+  knowledgeBaseId: string,
+  resourcePath: string
+) {
   try {
-    // Get the resource to access its knowledge base ID and path
-    const { connectionResourcesUrl } = await getConnectionUrls();
-    const resourceResponse = await GoogleDriveSession.get(
-      `${connectionResourcesUrl}?${new URLSearchParams({
-        resource_id: resourceId,
-      })}`
-    );
-
-    const resource = resourceResponse.data;
-    const knowledgeBaseId = resource.knowledge_base_id;
-    const resourcePath = resource.inode_path.path;
-
-    if (
-      !knowledgeBaseId ||
-      knowledgeBaseId === '00000000-0000-0000-0000-000000000000'
-    ) {
-      throw new Error(
-        '❌ Resource is not indexed or has no valid knowledge base.'
-      );
-    }
-
     // Remove from knowledge base
     await GoogleDriveSession.delete(
       `${STACK_AI_BACKEND_URL}/knowledge_bases/${knowledgeBaseId}/resources?${new URLSearchParams(
         { resource_path: resourcePath }
       )}`
     );
+    // Optionally, return success or refresh state here
   } catch (error) {
     console.error('Error de-indexing resource:', error);
     throw error;
   }
 }
 
-export async function removeResource(resourceId: string) {
-  await deIndexResource(resourceId);
+export async function removeResource(
+  knowledgeBaseId: string,
+  resourcePath: string
+) {
+  await deIndexResource(knowledgeBaseId, resourcePath);
 }

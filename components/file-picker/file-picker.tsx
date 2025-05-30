@@ -6,9 +6,10 @@ import Sidebar from './sidebar';
 import FileExplorer from './file-explorer';
 import { FilePickerHeader } from './file-picker-header';
 import { useToast } from '@/hooks/use-toast';
+import { FileItem } from '@/types/file-explorer';
 
 export default function FilePicker() {
-  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [selectedItems, setSelectedItems] = useState<FileItem[]>([]);
   const [isIndexingBulk, setIsIndexingBulk] = useState(false);
   const [isDeIndexingBulk, setIsDeIndexingBulk] = useState(false);
   const { toast } = useToast();
@@ -35,7 +36,7 @@ export default function FilePicker() {
     isDeIndexing,
   } = useFileExplorer();
 
-  const handleSelectItems = (itemIds: string[]) => {
+  const handleSelectItems = (itemIds: FileItem[]) => {
     setSelectedItems(itemIds);
   };
 
@@ -51,7 +52,9 @@ export default function FilePicker() {
 
     setIsIndexingBulk(true);
     try {
-      await Promise.all(selectedItems.map((id) => indexItem(id)));
+      await Promise.all(
+        selectedItems.map((item) => indexItem(item.id))
+      );
       toast({
         title: 'Success',
         description: `${selectedItems.length} item(s) indexed successfully`,
@@ -80,7 +83,15 @@ export default function FilePicker() {
 
     setIsDeIndexingBulk(true);
     try {
-      await Promise.all(selectedItems.map((id) => deIndexItem(id)));
+      await Promise.all(
+        selectedItems.map((item) =>
+          deIndexItem({
+            knowledgeBaseId: item.knowledge_base_id,
+            resourcePath: item.path,
+            resourceId: item.id,
+          })
+        )
+      );
       toast({
         title: 'Success',
         description: `${selectedItems.length} item(s) de-indexed successfully`,

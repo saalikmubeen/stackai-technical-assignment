@@ -27,10 +27,9 @@ interface FileListProps {
   onNavigate: (path: string) => void;
   indexedItems: Record<string, boolean>;
   onIndexItem: (id: string) => Promise<void>;
-  onDeIndexItem: (id: string) => Promise<void>;
-  onRemoveItem: (id: string) => Promise<void>;
+  onDeIndexItem: (item: FileItem) => Promise<void>;
   selectedItems: string[];
-  onSelectItem: (id: string, checked: boolean) => void;
+  onSelectItem: (item: FileItem, checked: boolean) => void;
   sortBy: 'name' | 'date';
   sortDirection: 'asc' | 'desc';
   loadingItems: Record<string, boolean>;
@@ -42,7 +41,6 @@ export default function FileList({
   indexedItems,
   onIndexItem,
   onDeIndexItem,
-  onRemoveItem,
   selectedItems,
   onSelectItem,
   sortBy,
@@ -104,7 +102,7 @@ export default function FileList({
                     <Checkbox
                       checked={isSelected}
                       onCheckedChange={(checked) =>
-                        onSelectItem(item.id, checked === true)
+                        onSelectItem(item, checked === true)
                       }
                     />
                   </td>
@@ -174,7 +172,7 @@ export default function FileList({
                       <DropdownMenuContent align="end">
                         {isIndexed ? (
                           <DropdownMenuItem
-                            onClick={() => onDeIndexItem(item.id)}
+                            onClick={() => onDeIndexItem(item)}
                             disabled={isLoading}
                           >
                             <Minus className="h-4 w-4 mr-2" />

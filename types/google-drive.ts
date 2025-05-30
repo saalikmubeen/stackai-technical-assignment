@@ -7,7 +7,7 @@ export interface Resource {
   resource_id: string;
   status?: string;
   children?: Resource[];
-  knowledge_base_id?: string;
+  knowledge_base_id: string;
   modified_at: string;
 }
 

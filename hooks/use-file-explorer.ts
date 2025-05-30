@@ -5,6 +5,7 @@ import {
   useQuery,
   useMutation,
   useQueryClient,
+  dataTagSymbol,
 } from '@tanstack/react-query';
 import * as api from '@/lib/api/google-drive';
 import { useToast } from '@/hooks/use-toast';
@@ -41,13 +42,16 @@ export function useFileExplorer() {
   const indexMutation = useMutation({
     mutationFn: api.indexResource,
     onMutate: async (resourceId) => {
-      await queryClient.cancelQueries({ queryKey: ['resources'] });
+      await queryClient.cancelQueries({
+        queryKey: ['resources', currentResourceId],
+      });
       const previousResources = queryClient.getQueryData([
         'resources',
+        currentResourceId,
       ]);
 
       queryClient.setQueryData(
-        ['resources'],
+        ['resources', currentResourceId],
         (old: Resource[] = []) =>
           old.map((r) =>
             r.resource_id === resourceId
@@ -58,8 +62,21 @@ export function useFileExplorer() {
 
       return { previousResources };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['resources'] });
+    onSuccess: (indexedResource, resourceId) => {
+      queryClient.setQueryData(
+        ['resources', currentResourceId],
+        (old: Resource[] = []) =>
+          old.map((r) =>
+            r.resource_id === resourceId
+              ? {
+                  ...r,
+                  knowledge_base_id:
+                    indexedResource.knowledge_base_id,
+                  status: indexedResource.status,
+                }
+              : r
+          )
+      );
       toast({
         title: 'Success',
         description: 'Resource indexed successfully',
@@ -67,7 +84,7 @@ export function useFileExplorer() {
     },
     onError: (error, _, context) => {
       queryClient.setQueryData(
-        ['resources'],
+        ['resources', currentResourceId],
         context?.previousResources
       );
       toast({
@@ -79,8 +96,16 @@ export function useFileExplorer() {
   });
 
   const deIndexMutation = useMutation({
-    mutationFn: api.deIndexResource,
-    onMutate: async (resourceId) => {
+    mutationFn: ({
+      knowledgeBaseId,
+      resourcePath,
+      resourceId,
+    }: {
+      knowledgeBaseId: string;
+      resourcePath: string;
+      resourceId: string;
+    }) => api.deIndexResource(knowledgeBaseId, resourcePath),
+    onMutate: async (args) => {
       await queryClient.cancelQueries({ queryKey: ['resources'] });
       const previousResources = queryClient.getQueryData([
         'resources',
@@ -90,7 +115,7 @@ export function useFileExplorer() {
         ['resources'],
         (old: Resource[] = []) =>
           old.map((r) =>
-            r.resource_id === resourceId
+            r.resource_id === args.resourceId
               ? { ...r, status: 'deindexing' }
               : r
           )
@@ -98,8 +123,23 @@ export function useFileExplorer() {
 
       return { previousResources };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['resources'] });
+    onSuccess: (data, vars, context) => {
+      console.log(data, vars, context);
+      // Invalidates the whole query
+      // queryClient.invalidateQueries({ queryKey: ['resources'] });
+      queryClient.setQueryData(
+        ['resources', currentResourceId],
+        (old: Resource[] = []) =>
+          old.map((r) =>
+            r.resource_id === vars.resourceId
+              ? {
+                  ...r,
+                  status: 'de-indexed',
+                }
+              : r
+          )
+      );
+
       toast({
         title: 'Success',
         description: 'Resource de-indexed successfully',
@@ -119,7 +159,13 @@ export function useFileExplorer() {
   });
 
   const removeMutation = useMutation({
-    mutationFn: api.removeResource,
+    mutationFn: ({
+      knowledgeBaseId,
+      resourcePath,
+    }: {
+      knowledgeBaseId: string;
+      resourcePath: string;
+    }) => api.removeResource(knowledgeBaseId, resourcePath),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['resources'] });
       toast({
@@ -151,6 +197,7 @@ export function useFileExplorer() {
           id: r.resource_id,
           name: r.inode_path.path.split('/').pop() || '',
           path: r.inode_path.path,
+          knowledge_base_id: r.knowledge_base_id,
           modifiedTime: r.modified_at,
         })),
 
@@ -160,6 +207,7 @@ export function useFileExplorer() {
           id: r.resource_id,
           name: r.inode_path.path.split('/').pop() || '',
           path: r.inode_path.path,
+          knowledge_base_id: r.knowledge_base_id,
           modifiedTime: r.modified_at,
           mimeType: 'application/octet-stream',
         })),

@@ -22,15 +22,22 @@ interface FileExplorerProps {
   files: File[];
   folders: Folder[];
   indexedItems: Record<string, boolean>;
-  onRemoveItem: (id: string) => Promise<void>;
+  onRemoveItem: (args: {
+    knowledgeBaseId: string;
+    resourcePath: string;
+  }) => Promise<void>;
   onIndexItem: (id: string) => Promise<void>;
-  onDeIndexItem: (id: string) => Promise<void>;
+  onDeIndexItem: (args: {
+    knowledgeBaseId: string;
+    resourcePath: string;
+    resourceId: string;
+  }) => Promise<void>;
   sortBy: 'name' | 'date';
   setSortBy: (value: 'name' | 'date') => void;
   sortDirection: 'asc' | 'desc';
   setSortDirection: (value: 'asc' | 'desc') => void;
-  selectedItems: string[];
-  onSelectItems: (itemIds: string[]) => void;
+  selectedItems: FileItem[];
+  onSelectItems: (items: FileItem[]) => void;
   breadcrumbs: { name: string; path: string }[];
 }
 
@@ -61,21 +68,28 @@ export default function FileExplorer({
   const handleSelectAll = (checked: boolean) => {
     setSelectAll(checked);
     if (checked) {
-      const allItemIds = [
-        ...folders.map((folder) => folder.id),
-        ...files.map((file) => file.id),
+      const allItems = [
+        ...files.map((file) => ({ ...file, type: 'file' as const })),
+        ...folders.map((folder) => ({
+          ...folder,
+          type: 'folder' as const,
+        })),
       ];
-      onSelectItems(allItemIds);
+      onSelectItems(allItems);
     } else {
       onSelectItems([]);
     }
   };
 
-  const handleSelectItem = (id: string, checked: boolean) => {
+  const handleSelectItem = (item: FileItem, checked: boolean) => {
     if (checked) {
-      onSelectItems([...selectedItems, id]);
+      onSelectItems([...selectedItems, item]);
     } else {
-      onSelectItems(selectedItems.filter((itemId) => itemId !== id));
+      onSelectItems(
+        selectedItems.filter(
+          (selectedItem) => selectedItem.id !== item.id
+        )
+      );
     }
   };
 
@@ -88,12 +102,16 @@ export default function FileExplorer({
     }
   };
 
-  const handleDeIndexItem = async (id: string) => {
-    setLoadingItems((prev) => ({ ...prev, [id]: true }));
+  const handleDeIndexItem = async (item: FileItem) => {
+    setLoadingItems((prev) => ({ ...prev, [item.id]: true }));
     try {
-      await onDeIndexItem(id);
+      await onDeIndexItem({
+        knowledgeBaseId: item.knowledge_base_id,
+        resourcePath: item.path,
+        resourceId: item.id,
+      });
     } finally {
-      setLoadingItems((prev) => ({ ...prev, [id]: false }));
+      setLoadingItems((prev) => ({ ...prev, [item.id]: false }));
     }
   };
 
@@ -152,8 +170,7 @@ export default function FileExplorer({
             indexedItems={indexedItems}
             onIndexItem={handleIndexItem}
             onDeIndexItem={handleDeIndexItem}
-            onRemoveItem={onRemoveItem}
-            selectedItems={selectedItems}
+            selectedItems={selectedItems.map((item) => item.id)}
             onSelectItem={handleSelectItem}
             sortBy={sortBy}
             sortDirection={sortDirection}
