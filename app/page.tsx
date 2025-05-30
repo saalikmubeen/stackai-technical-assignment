@@ -47,7 +47,7 @@ export default function Home() {
           Please wait while we connect your account.
         </p>
       </div>
-    ); // Or your custom loading spinner
+    );
   }
 
   return (
